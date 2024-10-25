@@ -1,0 +1,13 @@
+joint_name_to_servo_id: {
+  thumb_joint0: {'id': 0, 'product': 'futaba'},
+  thumb_pulley_joint: {'id': 5, 'product': 'futaba'},  
+  index_pulley_joint: {'id': 3, 'product': 'futaba'},
+  middle_pulley_joint: {'id': 4, 'product': 'futaba'},
+  ring_pulley_joint: {'id': 2, 'product': 'futaba'},
+  little_pulley_joint: {'id': 1, 'product': 'futaba'},
+  adduction_pulley_joint: {'id': 6, 'product': 'kondo'},
+  hand_base_joint: {'id': 7, 'product': 'kondo'},
+  arm_joint2: {'id': 8, 'product': 'kondo'},
+  arm_joint1: {'id': 9, 'product': 'kondo'},
+  arm_joint0: {'id': 11, 'product': 'kondo'}
+}
