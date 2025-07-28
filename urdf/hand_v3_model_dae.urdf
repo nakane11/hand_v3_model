@@ -601,7 +601,7 @@
     </collision>
   </link>
   <joint name="arm_joint0" type="revolute">
-    <limit effort="0.0" velocity="4.553" lower="-2.06167" upper="0.41233"/>
+    <limit effort="0.0" velocity="4.553" lower="-2.3562" upper="2.3562"/>
     <parent link="base_link"/>
     <child link="arm_link1"/>
     <axis xyz=" 0. -1.  0."/>
@@ -615,14 +615,14 @@
     <origin xyz="0.0 0.0 0.0707" rpy="0.0 -0.0 0.0"/>
   </joint>
   <joint name="arm_joint2" type="revolute">
-    <limit effort="0.0" velocity="6.545" lower="-1.5708" upper="0.06"/>
+    <limit effort="0.0" velocity="6.545" lower="-2.3562" upper="2.3562"/>
     <parent link="arm_link2"/>
     <child link="arm_link3"/>
     <axis xyz=" 0. -1.  0."/>
     <origin xyz="0.0 0.0 0.069" rpy="0.0 -0.0 0.0"/>
   </joint>
   <joint name="hand_base_joint" type="revolute">
-    <limit effort="0.0" velocity="6.545" lower="-1.5708" upper="1.5708"/>
+    <limit effort="0.0" velocity="6.545" lower="-2.3562" upper="2.3562"/>
     <parent link="arm_link3"/>
     <child link="hand_link"/>
     <axis xyz="-1.  0.  0."/>
