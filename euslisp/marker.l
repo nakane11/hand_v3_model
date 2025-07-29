@@ -35,6 +35,14 @@
     (send cyl :set-color color)
     cyl)
 
+  (:make-palm-marker
+    (pos color)
+    (setq cyl (make-cube 40 40 1))
+    (send cyl :replace-pos pos)
+    (send cyl :rotate (/ pi 2) :y)
+    (send cyl :set-color color)
+    cyl)
+
   (:initialize-markers
     ()
     (setq marker-tb (make-hash-table :test #'string-equal))
@@ -99,7 +107,13 @@
       (sethash (send thumb-link1 :name) marker-tb cyl1)
       (sethash (send thumb-link2 :name) marker-tb cyl2)
       )
-    )
+    (let* ((hand-link (send self :get-link-by-name "hand_link"))
+           (pos (send (send hand-link :copy-worldcoords) :copy-pos))
+           (cyl (send self :make-palm-marker pos original-color)))
+      (send cyl :translate #f(18 0 60) :world)
+      (send hand-link :assoc cyl)
+      (sethash (send hand-link :name) marker-tb cyl)
+    ))
 
   (:set-color
     (name &key rgb a)
@@ -146,10 +160,10 @@
         (send *marker* :set-color (format nil "~A_link2-l" finger-name) :a (sensor-to-transparency (elt finger-values 5)))
         (send *marker* :set-color (format nil "~A_link3" finger-name) :a (sensor-to-transparency (elt finger-values 6)))
         ))
+    (send *marker* :set-color "hand_link" :a (sensor-to-transparency (elt sensor-data 0)))
     (send *marker* :set-color "thumb_link0" :a (sensor-to-transparency (elt sensor-data 8)))
     (send *marker* :set-color "thumb_link1" :a (sensor-to-transparency (elt sensor-data 16)))
     (send *marker* :set-color "thumb_link2" :a (sensor-to-transparency (elt sensor-data 24)))
-    ;; (elt sensor-data 0)
       )
   (send *irtviewer* :draw-objects))
 (ros::subscribe "force_data_diff" std_msgs::Float32MultiArray #'sensor-cb)
