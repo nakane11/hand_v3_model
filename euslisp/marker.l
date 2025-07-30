@@ -2,9 +2,6 @@
 
 (hand_v3_model)
 
-;; ("base_link" "adduction_pulley_link" "arm_link1" "arm_link2" "arm_link3" "hand_link" "index_link0" "index_link1" "index_link2" "index_link3" "index_pulley_link" "little_link0" "little_link1" "little_link2" "little_link3" "little_pulley_link" "middle_link0" "middle_link1" "middle_link2" "middle_link3" "middle_pulley_link" "ring_link0" "ring_link1" "ring_link2" "ring_link3" "ring_pulley_link" "thumb_link0" "thumb_link1" "thumb_link2" "thumb_pulley_link")
-
-
 (defclass marker
   :slots (robot-model marker-tb))
 
@@ -132,9 +129,20 @@
 (send *marker* :initialize-markers)
 (setq markers (send *marker* :marker-object))
 
+(defun set-collada-body-transparency (c-body transparency)
+  (unless (derivedp c-body collada-body)
+    (return-from set-collada-body-transparency nil))
+  (let ((glvertices (send c-body :glvertices)))
+    ;; :GL-DISPLAYLIST-IDが残っていると、後から透明度を変更できない
+    (gl::delete-displaylist-id (get glvertices :GL-DISPLAYLIST-ID))
+    (setf (get glvertices :GL-DISPLAYLIST-ID) nil)
+    (setf (get glvertices :transparent) transparency)))
+(mapcar #'(lambda (body) (set-collada-body-transparency body 0.5)) (send *hand_v3_model* :bodies))
+
 (unless (boundp '*irtviewer*)
   (make-irtviewer))
 (send *irtviewer* :viewer :viewing :look #f(469.478 -22.6601 396.048) #f(-19.9775 11.566 370.334) #f(0.0 0.0 1.0))
+(send *irtviewer* :change-background #f(0.7 0.7 0.7))
 (send *irtviewer* :objects (append (list *hand_v3_model*) markers))
 (send *irtviewer* :draw-objects)
 
@@ -153,9 +161,11 @@
 (defun sensor-to-transparency (val)
   (min 1.0 (* 2.5 (/ val 4096))))
 (defun sensor-to-color (val)
-  (if (< val 4)
-      (float-vector 0.2 0.2 1.0)
-      (float-vector 1.0 0.2 0.2)))
+  (cond
+   ((= val 1) (float-vector 0.2 0.2 1.0))
+   ((= val 2) (float-vector 0.2 1.0 0.2))
+   ((= val 3) (float-vector 1.0 0.2 0.2))
+   (t (float-vector 0.3 0.3 0.3))))
 
 (defun sensor-cb (msg)
   (setq *msg* msg)
@@ -177,10 +187,10 @@
         (send *marker* :set-color (format nil "~A_link2-l" finger-name) :rgb (sensor-to-color (cadr (elt finger-values 5))) :a (sensor-to-transparency (car (elt finger-values 5))))
         (send *marker* :set-color (format nil "~A_link3" finger-name) :rgb (sensor-to-color (cadr (elt finger-values 6))) :a (sensor-to-transparency (car (elt finger-values 6))))
         ))
-    (send *marker* :set-color "hand_link" :a (sensor-to-transparency (car (elt sensor-data 0))))
-    (send *marker* :set-color "thumb_link0" :a (sensor-to-transparency (car (elt sensor-data 8))))
-    (send *marker* :set-color "thumb_link1" :a (sensor-to-transparency (car (elt sensor-data 16))))
-    (send *marker* :set-color "thumb_link2" :a (sensor-to-transparency (car (elt sensor-data 24))))
+    (send *marker* :set-color "hand_link" :rgb (sensor-to-color (cadr (elt sensor-data 0))) :a (sensor-to-transparency (car (elt sensor-data 0))))
+    (send *marker* :set-color "thumb_link0" :rgb (sensor-to-color (cadr (elt sensor-data 8))) :a (sensor-to-transparency (car (elt sensor-data 8))))
+    (send *marker* :set-color "thumb_link1" :rgb (sensor-to-color (cadr (elt sensor-data 16))) :a (sensor-to-transparency (car (elt sensor-data 16))))
+    (send *marker* :set-color "thumb_link2" :rgb (sensor-to-color (cadr (elt sensor-data 24))) :a (sensor-to-transparency (car (elt sensor-data 24))))
       )
   (send *irtviewer* :draw-objects))
 (ros::subscribe "force_data_diff" std_msgs::Float32MultiArray #'sensor-cb)
