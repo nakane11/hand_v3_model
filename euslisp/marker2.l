@@ -144,8 +144,6 @@
       (sethash "palm_rside_link0" marker-tb hand-rside0-cyl)
       (sethash "palm_rside_link1" marker-tb hand-rside1-cyl)
       )
-
-
     )
 
   (:set-color
@@ -227,6 +225,20 @@
     (send *marker* :set-color "thumb_link0" :rgb (sensor-to-color (cadr (elt sensor-data 8))) :a (sensor-to-transparency (car (elt sensor-data 8))))
     (send *marker* :set-color "thumb_link1" :rgb (sensor-to-color (cadr (elt sensor-data 16))) :a (sensor-to-transparency (car (elt sensor-data 16))))
     (send *marker* :set-color "thumb_link2" :rgb (sensor-to-color (cadr (elt sensor-data 24))) :a (sensor-to-transparency (car (elt sensor-data 24))))
+
+    (send *marker* :set-color "little_link1-r" :a 0)
+    (send *marker* :set-color "ring_link2-l" :a 0)
+    (send *marker* :set-color "ring_link1-r" :a 0)
+    (send *marker* :set-color "middle_link2-l" :a 0)
+    (send *marker* :set-color "middle_link1-r" :a 0)
+    (send *marker* :set-color "index_link2-l" :a 0)
+
+    (send *marker* :set-color "palm_lside_link1" :rgb (sensor-to-color (cadr (elt sensor-data 1))) :a (sensor-to-transparency (car (elt sensor-data 1))))
+    (send *marker* :set-color "palm_lside_link0" :rgb (sensor-to-color (cadr (elt sensor-data 14))) :a (sensor-to-transparency (car (elt sensor-data 14))))
+    (send *marker* :set-color "palm_rside_link1" :rgb (sensor-to-color (cadr (elt sensor-data 9))) :a (sensor-to-transparency (car (elt sensor-data 9))))
+    (send *marker* :set-color "palm_rside_link0" :rgb (sensor-to-color (cadr (elt sensor-data 22))) :a (sensor-to-transparency (car (elt sensor-data 22))))
+    (send *marker* :set-color "thumb_side_link1" :rgb (sensor-to-color (cadr (elt sensor-data 17))) :a (sensor-to-transparency (car (elt sensor-data 17))))
+    (send *marker* :set-color "thumb_side_link0" :rgb (sensor-to-color (cadr (elt sensor-data 30))) :a (sensor-to-transparency (car (elt sensor-data 30))))
       )
   (send *irtviewer* :draw-objects))
 (ros::subscribe "force_data_diff" std_msgs::Float32MultiArray #'sensor-cb)
