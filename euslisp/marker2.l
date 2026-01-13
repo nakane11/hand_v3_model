@@ -23,7 +23,7 @@
     (let ((value-list (send marker-tb :list-values)))
       (nreverse (flatten value-list))))
 
-  (:make-marker
+  (:make-marker-body
     (pos color &key (size 6))
     (setq cyl (make-cylinder size 1))
     (send cyl :replace-pos pos)
@@ -32,7 +32,7 @@
     (send cyl :set-color color)
     cyl)
 
-  (:make-palm-marker
+  (:make-palm-marker-body
     (pos color)
     (setq cyl (make-cube 40 40 1))
     (send cyl :replace-pos pos)
@@ -40,65 +40,78 @@
     (send cyl :set-color color)
     cyl)
 
+  (:add-marker
+    (parent name pos mk-color &key (rot-axis nil) (rot-deg 0) (trans nil) (mk-size nil))
+    (let ((mk (if mk-size
+                (send self :make-marker-body pos mk-color :size mk-size)
+                (send self :make-marker-body pos mk-color))))
+      (when rot-axis
+        (send mk :rotate (deg2rad rot-deg) rot-axis :world))
+      (when trans
+        (send mk :translate trans :world))
+      (send parent :assoc mk)
+      (sethash name marker-tb mk)
+      ))
+
+  (:add-palm-marker
+    (parent name pos mk-color &key (rot-axis nil) (rot-deg 0) (trans nil) (mk-size nil))
+    (let ((mk (if mk-size
+                (send self :make-palm-marker-body pos mk-color :size mk-size)
+                (send self :make-palm-marker-body pos mk-color))))
+      (when rot-axis
+        (send mk :rotate (deg2rad rot-deg) rot-axis :world))
+      (when trans
+        (send mk :translate trans :world))
+      (send parent :assoc mk)
+      (sethash name marker-tb mk)
+      ))
+
   (:initialize-markers
     ()
     (setq marker-tb (make-hash-table :test #'string-equal))
-    (setq original-color #f(1.0 0.2 0.2 0.6))
+    (setq front-color #f(1.0 0.2 0.2 0.6))
+    (setq side-color #f(0.8 0.8 0.0 0.6))
     (dolist (finger (list "index" "middle" "ring" "little"))
-      (let* ((link1 (send self :get-link-by-name (format nil "~A_link1" finger)))
-             (link2 (send self :get-link-by-name (format nil "~A_link2" finger)))
-             (link3 (send self :get-link-by-name (format nil "~A_link3" finger)))
-             (pos1 (scale 0.5 (v+ (send (send link1 :copy-worldcoords) :pos) (send (send link2 :copy-worldcoords) :pos))))
-             (pos2 (scale 0.5 (v+ (send (send link2 :copy-worldcoords) :pos) (send (send link3 :copy-worldcoords) :pos))))
-             (pos3 (send (send (send link3 :copy-worldcoords) :translate (float-vector -1.5 0 12) :world) :copy-pos))
-             (cyl1 (send self :make-marker pos1 original-color))
-             (cyl1-l (send self :make-marker pos1 original-color))
-             (cyl1-r (send self :make-marker pos1 original-color))
-             (cyl2 (send self :make-marker pos2 original-color))
-             (cyl2-l (send self :make-marker pos2 original-color))
-             (cyl2-r (send self :make-marker pos2 original-color))
-             (cyl3 (send self :make-marker pos3 original-color)))
-        (send cyl1-l :rotate (deg2rad -80) :z :world)
-        (send cyl1-l :translate (float-vector -5 -6 0) :world)
-        (send cyl1-r :rotate (deg2rad 80) :z :world)
-        (send cyl1-r :translate (float-vector -5 6 0) :world)
-        (send cyl2-l :rotate (deg2rad -80) :z :world)
-        (send cyl2-l :translate (float-vector -5 -6 0) :world)
-        (send cyl2-r :rotate (deg2rad 80) :z :world)
-        (send cyl2-r :translate (float-vector -5 6 0) :world)
-        (send cyl3 :rotate (deg2rad -12) :y)
-        (send link1 :assoc cyl1)
-        (send link1 :assoc cyl1-l)
-        (send link1 :assoc cyl1-r)
-        (send link2 :assoc cyl2)
-        (send link1 :assoc cyl2-l)
-        (send link1 :assoc cyl2-r)
-        (send link3 :assoc cyl3)
-        (sethash (send link1 :name) marker-tb cyl1)
-        (sethash (format nil "~A-l" (send link1 :name)) marker-tb cyl1-l)
-        (sethash (format nil "~A-r" (send link1 :name)) marker-tb cyl1-r)
-        (sethash (send link2 :name) marker-tb cyl2)
-        (sethash (format nil "~A-l" (send link2 :name)) marker-tb cyl2-l)
-        (sethash (format nil "~A-r" (send link2 :name)) marker-tb cyl2-r)
-        (sethash (send link3 :name) marker-tb cyl3)
+      (let* ((l1 (send self :get-link-by-name (format nil "~A_link1" finger)))
+             (l2 (send self :get-link-by-name (format nil "~A_link2" finger)))
+             (l3 (send self :get-link-by-name (format nil "~A_link3" finger)))
+             (p1 (scale 0.5 (v+ (send (send l1 :copy-worldcoords) :pos) (send (send l2 :copy-worldcoords) :pos))))
+             (p2 (scale 0.5 (v+ (send (send l2 :copy-worldcoords) :pos) (send (send l3 :copy-worldcoords) :pos))))
+             (p3 (send (send (send l3 :copy-worldcoords) :translate (float-vector -1.5 0 12) :world) :copy-pos)))
+        (send self :add-marker l1 (send l1 :name) p1 front-color)
+        (send self :add-marker l1 (format nil "~A-l" (send l1 :name)) p1 side-color
+              :rot-axis :z :rot-deg -75 :trans (float-vector -5 -6.5 0))
+        (send self :add-marker l1 (format nil "~A-r" (send l1 :name)) p1 side-color
+              :rot-axis :z :rot-deg 75  :trans (float-vector -5 6.5 0))
+
+        (send self :add-marker l2 (send l2 :name) p2 front-color)
+        (send self :add-marker l2 (format nil "~A-l" (send l2 :name)) p2 side-color
+              :rot-axis :z :rot-deg -75 :trans (float-vector -5 -6.5 0))
+        (send self :add-marker l2 (format nil "~A-r" (send l2 :name)) p2 side-color
+              :rot-axis :z :rot-deg 75  :trans (float-vector -5 6.5 0))
+
+        (send self :add-marker l3 (send l3 :name) p3 front-color
+              :rot-axis :y :rot-deg -12)
         ))
+
     (let* ((thumb-link0 (send self :get-link-by-name "thumb_link0"))
            (thumb-link1 (send self :get-link-by-name "thumb_link1"))
            (thumb-link2 (send self :get-link-by-name "thumb_link2"))
            (pos0 (send (send (send thumb-link0 :copy-worldcoords) :translate (float-vector -1.5 0 12) :world) :copy-pos))
            (pos1 (scale 0.5 (v+ (send (send thumb-link1 :copy-worldcoords) :pos) (send (send thumb-link2 :copy-worldcoords) :pos))))
            (pos2 (send (send (send thumb-link2 :copy-worldcoords) :translate (float-vector -1.5 0 12) :world) :copy-pos))
-           (cyl0 (send self :make-marker pos0 original-color))
-           (cyl1 (send self :make-marker pos1 original-color))
-           (cyl2 (send self :make-marker pos2 original-color))
-           (side-cyl0 (send self :make-marker pos0 original-color))
-           (side-cyl1 (send self :make-marker pos1 original-color)))
+           (cyl0 (send self :make-marker-body pos0 front-color))
+           (cyl1 (send self :make-marker-body pos1 front-color))
+           (cyl2 (send self :make-marker-body pos2 front-color))
+           (side-cyl0 (send self :make-marker-body pos0 side-color))
+           (side-cyl1 (send self :make-marker-body pos1 side-color)))
       (send cyl1 :replace-rot (send (send thumb-link1 :copy-worldcoords) :copy-rot))
       (send side-cyl1 :replace-rot (send (send thumb-link1 :copy-worldcoords) :copy-rot))
       (send cyl2 :replace-rot (send (send thumb-link2 :copy-worldcoords) :copy-rot))
       (send side-cyl0 :replace-rot (send (send thumb-link1 :copy-worldcoords) :copy-rot))
+
       (send cyl0 :translate #f(2 15 0) :world)
-      (send side-cyl0 :translate #f(0 26 3) :world)
+      (send side-cyl0 :translate #f(10 26 3) :world)
       (send side-cyl0 :rotate (deg2rad 90) :x :local)
       (send cyl1 :translate #f(0 -1 -2) :local)
       (send side-cyl1 :translate #f(0 5 4) :local)
@@ -114,36 +127,20 @@
       (sethash (send thumb-link1 :name) marker-tb cyl1)
       (sethash (send thumb-link2 :name) marker-tb cyl2)
       (sethash "thumb_side_link0" marker-tb side-cyl0)
-      (sethash "thumb_side_link1" marker-tb side-cyl1)
-      )
-    (let* ((hand-link (send self :get-link-by-name "hand_link"))
-           (hand-pos (send (send hand-link :copy-worldcoords) :copy-pos))
-           (hand-cyl (send self :make-palm-marker hand-pos original-color))
-           (hand-lside0-cyl (send self :make-marker hand-pos original-color :size 11))
-           (hand-lside1-cyl (send self :make-marker hand-pos original-color :size 11))
-           (hand-rside0-cyl (send self :make-marker hand-pos original-color :size 8))
-           (hand-rside1-cyl (send self :make-marker hand-pos original-color :size 8))
-           )
-      (send hand-cyl :translate #f(18 0 60) :world)
-      (send hand-link :assoc hand-cyl)
-      (send hand-lside0-cyl :translate #f(0 -32 60) :world)
-      (send hand-lside0-cyl :rotate (deg2rad 90) :z :world)
-      (send hand-lside1-cyl :translate #f(0 -32 85) :world)
-      (send hand-lside1-cyl :rotate (deg2rad 90) :z :world)
-      (send hand-rside0-cyl :translate #f(0 34 74) :world)
-      (send hand-rside0-cyl :rotate (deg2rad 90) :z :world)
-      (send hand-rside1-cyl :translate #f(0 34 95) :world)
-      (send hand-rside1-cyl :rotate (deg2rad 90) :z :world)
-      (send hand-link :assoc hand-lside0-cyl)
-      (send hand-link :assoc hand-lside1-cyl)
-      (send hand-link :assoc hand-rside0-cyl)
-      (send hand-link :assoc hand-rside1-cyl)
-      (sethash (send hand-link :name) marker-tb hand-cyl)
-      (sethash "palm_lside_link0" marker-tb hand-lside0-cyl)
-      (sethash "palm_lside_link1" marker-tb hand-lside1-cyl)
-      (sethash "palm_rside_link0" marker-tb hand-rside0-cyl)
-      (sethash "palm_rside_link1" marker-tb hand-rside1-cyl)
-      )
+      (sethash "thumb_side_link1" marker-tb side-cyl1))
+
+    (let* ((h-link (send self :get-link-by-name "hand_link"))
+           (h-pos (send (send h-link :copy-worldcoords) :copy-pos)))
+      (send self :add-palm-marker h-link (send h-link :name) h-pos front-color
+            :trans #f(18 0 60))
+      (send self :add-marker h-link "palm_lside_link0" h-pos side-color
+            :mk-size 9 :rot-axis :z :rot-deg 104 :trans #f(0 -33.8 60))
+      (send self :add-marker h-link "palm_lside_link1" h-pos side-color
+            :mk-size 9 :rot-axis :z :rot-deg 104 :trans #f(0 -33.8 85))
+      (send self :add-marker h-link "palm_rside_link0" h-pos side-color
+            :mk-size 9 :rot-axis :z :rot-deg 76 :trans #f(5 35 74))
+      (send self :add-marker h-link "palm_rside_link1" h-pos side-color
+            :mk-size 9 :rot-axis :z :rot-deg 76 :trans #f(5 35 95)))
     )
 
   (:set-color
@@ -171,7 +168,7 @@
     (gl::delete-displaylist-id (get glvertices :GL-DISPLAYLIST-ID))
     (setf (get glvertices :GL-DISPLAYLIST-ID) nil)
     (setf (get glvertices :transparent) transparency)))
-(mapcar #'(lambda (body) (set-collada-body-transparency body 0.5)) (send *hand_v3_model* :bodies))
+;; (mapcar #'(lambda (body) (set-collada-body-transparency body 0.5)) (send *hand_v3_model* :bodies))
 
 (unless (boundp '*irtviewer*)
   (make-irtviewer))
