@@ -159,6 +159,13 @@
 (setq *marker* (instance marker :init *hand_v3_model*))
 (send *marker* :initialize-markers)
 (setq markers (send *marker* :marker-object))
+(send *marker* :set-color "little_link1-r" :a 0)
+(send *marker* :set-color "ring_link2-l" :a 0)
+(send *marker* :set-color "ring_link1-r" :a 0)
+(send *marker* :set-color "middle_link2-l" :a 0)
+(send *marker* :set-color "middle_link1-r" :a 0)
+(send *marker* :set-color "index_link2-l" :a 0)
+
 
 (defun set-collada-body-transparency (c-body transparency)
   (unless (derivedp c-body collada-body)
@@ -198,46 +205,27 @@
    ((= val 3) (float-vector 1.0 0.2 0.2))
    (t (float-vector 0.3 0.3 0.3))))
 
+(setq sensor-order-list
+      (list "little_link3" "little_link2-l" "little_link2" "little_link2-r" "little_link1-l" "little_link1"
+            "ring_link3" "ring_link2" "ring_link2-r" "ring_link1-l" "ring_link1"
+            "middle_link3" "middle_link2" "middle_link2-r" "middle_link1-l" "middle_link1"
+            "index_link3" "index_link2" "index_link2-r" "index_link1-l" "index_link1" "index_link1-r"
+            "thumb_link2" "thumb_link1" "thumb_side_link1" "thumb_link0" "thumb_side_link0"
+            "palm_lside_link1" "palm_lside_link0" "palm_rside_link1" "palm_rside_link0" "hand_link"))
+
 (defun sensor-cb (msg)
-  (setq *msg* msg)
-  (let ((sensor-data (mapcar #'(lambda (val rank) (list val rank)) (coerce (send *msg* :data) cons) (rank-list-desc (coerce (send msg :data) cons))))
-        (sensor-tb (make-hash-table :test #'string-equal)))
-    (sethash "little" sensor-tb (subseq sensor-data 1 8))
-    (sethash "ring" sensor-tb (subseq sensor-data 9 16))
-    (sethash "middle" sensor-tb (subseq sensor-data 17 24))
-    (sethash "index" sensor-tb (subseq sensor-data 25 32))
-
-    (dolist (finger-data (send sensor-tb :list))
-      (let ((finger-name (car finger-data))
-            (finger-values (cdr finger-data)))
-        (send *marker* :set-color (format nil "~A_link1-r" finger-name) :rgb (sensor-to-color (cadr (elt finger-values 0))) :a (sensor-to-transparency (car (elt finger-values 0))))
-        (send *marker* :set-color (format nil "~A_link1" finger-name) :rgb (sensor-to-color (cadr (elt finger-values 1))) :a (sensor-to-transparency (car (elt finger-values 1))))
-        (send *marker* :set-color (format nil "~A_link1-l" finger-name) :rgb (sensor-to-color (cadr (elt finger-values 2))) :a (sensor-to-transparency (car (elt finger-values 2))))
-        (send *marker* :set-color (format nil "~A_link2-r" finger-name) :rgb (sensor-to-color (cadr (elt finger-values 3))) :a (sensor-to-transparency (car (elt finger-values 3))))
-        (send *marker* :set-color (format nil "~A_link2" finger-name) :rgb (sensor-to-color (cadr (elt finger-values 4))) :a (sensor-to-transparency (car (elt finger-values 4))))
-        (send *marker* :set-color (format nil "~A_link2-l" finger-name) :rgb (sensor-to-color (cadr (elt finger-values 5))) :a (sensor-to-transparency (car (elt finger-values 5))))
-        (send *marker* :set-color (format nil "~A_link3" finger-name) :rgb (sensor-to-color (cadr (elt finger-values 6))) :a (sensor-to-transparency (car (elt finger-values 6))))
-        ))
-    (send *marker* :set-color "hand_link" :rgb (sensor-to-color (cadr (elt sensor-data 0))) :a (sensor-to-transparency (car (elt sensor-data 0))))
-    (send *marker* :set-color "thumb_link0" :rgb (sensor-to-color (cadr (elt sensor-data 8))) :a (sensor-to-transparency (car (elt sensor-data 8))))
-    (send *marker* :set-color "thumb_link1" :rgb (sensor-to-color (cadr (elt sensor-data 16))) :a (sensor-to-transparency (car (elt sensor-data 16))))
-    (send *marker* :set-color "thumb_link2" :rgb (sensor-to-color (cadr (elt sensor-data 24))) :a (sensor-to-transparency (car (elt sensor-data 24))))
-
-    (send *marker* :set-color "little_link1-r" :a 0)
-    (send *marker* :set-color "ring_link2-l" :a 0)
-    (send *marker* :set-color "ring_link1-r" :a 0)
-    (send *marker* :set-color "middle_link2-l" :a 0)
-    (send *marker* :set-color "middle_link1-r" :a 0)
-    (send *marker* :set-color "index_link2-l" :a 0)
-
-    (send *marker* :set-color "palm_lside_link1" :rgb (sensor-to-color (cadr (elt sensor-data 1))) :a (sensor-to-transparency (car (elt sensor-data 1))))
-    (send *marker* :set-color "palm_lside_link0" :rgb (sensor-to-color (cadr (elt sensor-data 14))) :a (sensor-to-transparency (car (elt sensor-data 14))))
-    (send *marker* :set-color "palm_rside_link1" :rgb (sensor-to-color (cadr (elt sensor-data 9))) :a (sensor-to-transparency (car (elt sensor-data 9))))
-    (send *marker* :set-color "palm_rside_link0" :rgb (sensor-to-color (cadr (elt sensor-data 22))) :a (sensor-to-transparency (car (elt sensor-data 22))))
-    (send *marker* :set-color "thumb_side_link1" :rgb (sensor-to-color (cadr (elt sensor-data 17))) :a (sensor-to-transparency (car (elt sensor-data 17))))
-    (send *marker* :set-color "thumb_side_link0" :rgb (sensor-to-color (cadr (elt sensor-data 30))) :a (sensor-to-transparency (car (elt sensor-data 30))))
-      )
+  (let* ((raw-data (coerce (send msg :data) cons))
+         (ranks (rank-list-desc raw-data)))
+    (mapc #'(lambda (name val rank)
+              (send *marker* :set-color name
+                    :rgb (sensor-to-color rank)        ;; ランクから色を決定
+                    :a   (sensor-to-transparency val)) ;; 値から透明度を決定
+              )
+          sensor-order-list
+          raw-data
+          ranks))
   (send *irtviewer* :draw-objects))
+
 (ros::subscribe "force_data_diff" std_msgs::Float32MultiArray #'sensor-cb)
 
 (do-until-key
