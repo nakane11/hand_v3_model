@@ -38,6 +38,7 @@
 (defvar *trained-models* nil)
 
 
+(defvar *pub-msg* (instance std_msgs::Int8 :init))
 ;; --- 2. 数学ヘルパー関数 ---
 
 (defun v-mul (v1 v2)
@@ -134,6 +135,15 @@
 
 
 ;; --- 5. ROS Callback ---
+(defun get-class-id (class-sym)
+  (case class-sym
+    (:class-1 1)
+    (:class-2 2)
+    (:class-3 3)
+    (:class-4 4)
+    (:class-5 5)
+    (:class-6 6)
+    (t -1))) ;; 想定外のクラス名
 
 (defun sensor-cb (msg)
   (let ((data (send msg :data)))
@@ -141,6 +151,7 @@
         (setq *current-sensor-vector* (scale (/ 1.0 *sensor-max-val*) data))
         (warn "Received data length is not 32!~%"))))
 
+(ros::advertise "hand_class" std_msgs::Int8 1)
 (ros::subscribe "force_data_diff" std_msgs::Float32MultiArray #'sensor-cb)
 
 
@@ -200,9 +211,11 @@
 
       ;; --- B. 推論 ---
       (when (and inference-mode *trained-models*)
-        (let ((input-norm (norm *current-sensor-vector*)))
+        (let ((input-norm (norm *current-sensor-vector*))
+              (publish-val 0))
           (cond
-            ((< input-norm *contact-threshold*)
+           ((< input-norm *contact-threshold*)
+            (setq publish-val 0)
              (format t "Status: No Contact (Level: ~5,3F)~%" input-norm))
 
             (t
@@ -220,9 +233,15 @@
                      (setq best-class class-name))))
 
                (if (> max-score *similarity-threshold*)
-                   (format t "Result: ~10A (Score: ~5,3F, Level: ~5,3F)~%" best-class max-score input-norm)
-                   (format t "Result: UNKNOWN    (Score: ~5,3F, Level: ~5,3F)~%" max-score input-norm))
+                   (progn
+                     (setq publish-val (get-class-id best-class))
+                     (format t "Result: ~10A (Score: ~5,3F, Level: ~5,3F)~%" best-class max-score input-norm))
+                 (progn
+                   (setq publish-val -1)
+                   (format t "Result: UNKNOWN    (Score: ~5,3F, Level: ~5,3F)~%" max-score input-norm)))
                )))
+          (send *pub-msg* :data publish-val)
+          (ros::publish "hand_class" *pub-msg*)
         (finish-output *standard-output*)))
 
       (unix:usleep 100000)))
