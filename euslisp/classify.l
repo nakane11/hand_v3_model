@@ -2,39 +2,55 @@
 
 (ros::roseus "classify")
 
-;; --- 1. グローバル変数定義 ---
+;; --- 1. グローバル変数・定数定義 ---
 
-;; 現在のセンサ値
-(defvar *current-sensor-vector* (instantiate float-vector 32))
+;; センサの最大値 (12bit = 4095)
+(defconstant *sensor-max-val* 4095.0)
 
-;; 学習データの一時保存用: ((:class-name . (vec1 vec2 ...)) ...)
-(defvar *raw-training-data* nil)
+;; 正規化後の接触判定閾値 (0.0~1.0スケール)
+(defconstant *contact-threshold* 0.3)
 
-;; 学習済みモデル: ((:class-name . (mean-vec weight-vec)) ...)
-(defvar *trained-models* nil)
+;; 類似度判定の閾値
+(defconstant *similarity-threshold* 0.65)
 
 ;; ゼロ除算防止用の微小値
 (defconstant *epsilon* 1e-6)
 
+;; --- パラメータ調整用定数 ---
+
+;; 分散のベースライン (ノイズフロア)
+;; これを大きくすると、重みの最大値が下がり、判定がマイルドになります。
+;; 推奨: 0.001 ~ 0.01
+(defconstant *base-variance* 0.005)
+
+;; 重みの最大値リミッター
+(defconstant *max-weight-limit* 200.0)
+
+;; --- 変数定義 ---
+
+;; 現在のセンサ値 (常に0.0~1.0に正規化される)
+(defvar *current-sensor-vector* (instantiate float-vector 32))
+
+;; ★保存対象: 生の学習データ ((:class-name . (vec1 vec2 ...)) ...)
+(defvar *raw-training-data* nil)
+
+;; 学習済みモデル (毎回計算する)
+(defvar *trained-models* nil)
+
 
 ;; --- 2. 数学ヘルパー関数 ---
 
-;; 要素ごとの掛け算 (Hadamard product)
 (defun v-mul (v1 v2)
   (let ((res (instantiate float-vector (length v1))))
     (dotimes (i (length v1))
       (setf (aref res i) (* (aref v1 i) (aref v2 i))))
     res))
 
-;; 重み付きコサイン類似度の計算
-;; S = sum(w * x * mu) / (sqrt(sum(w * x^2)) * sqrt(sum(w * mu^2)))
 (defun calc-weighted-cosine-similarity (input-vec mean-vec weight-vec)
-  (let* ((w-x (v-mul weight-vec input-vec))      ;; w * x
-         (w-mu (v-mul weight-vec mean-vec))      ;; w * mu
-         (numerator (v. w-x mean-vec))           ;; 分子: sum((w*x) * mu)
-         ;; 分母の項1: sqrt(sum(w * x^2)) -> sum((w*x) * x)
+  (let* ((w-x (v-mul weight-vec input-vec))
+         (w-mu (v-mul weight-vec mean-vec))
+         (numerator (v. w-x mean-vec))
          (denom-input (sqrt (abs (v. w-x input-vec))))
-         ;; 分母の項2: sqrt(sum(w * mu^2)) -> sum((w*mu) * mu)
          (denom-mean (sqrt (abs (v. w-mu mean-vec)))))
 
     (if (or (< denom-input *epsilon*) (< denom-mean *epsilon*))
@@ -42,7 +58,7 @@
         (/ numerator (* denom-input denom-mean)))))
 
 ;; 平均ベクトルと重みベクトルを計算する
-;; 重み w = |mean| / (variance + epsilon)
+;; 最新ロジック: 平均値を分子に使わず、分散の逆数だけで計算
 (defun calc-stats (vec-list)
   (let* ((len (length (car vec-list)))
          (n (length vec-list))
@@ -50,12 +66,12 @@
          (var-vec (instantiate float-vector len))
          (weight-vec (instantiate float-vector len)))
 
-    ;; 1. 平均の計算
+    ;; 1. 平均
     (dolist (v vec-list)
       (setq mean-vec (v+ mean-vec v)))
     (setq mean-vec (scale (/ 1.0 n) mean-vec))
 
-    ;; 2. 分散の計算 sum((x - mu)^2) / n
+    ;; 2. 分散
     (dolist (v vec-list)
       (let ((diff (v- v mean-vec)))
         (dotimes (i len)
@@ -63,34 +79,28 @@
                 (+ (aref var-vec i) (expt (aref diff i) 2))))))
     (setq var-vec (scale (/ 1.0 n) var-vec))
 
-    ;; 3. 重みの計算 (|mu| / (var + e))
+    ;; 3. 重み計算 (分散の逆数アプローチ)
     (dotimes (i len)
-      ;; (setf (aref weight-vec i)
-      ;;       (/ (abs (aref mean-vec i)) (+ (aref var-vec i) *epsilon*))))
-      (let ((mu (aref mean-vec i))
-            (var (aref var-vec i)))
-        ;; ここを変更しました: abs(mu) -> (expt mu 2)
-        (setf (aref weight-vec i)
-              (/ (expt mu 2) (+ var *epsilon*)))))
+      (let ((var (aref var-vec i)))
+        ;; 分子に平均値を使わないことで、値が0で安定している箇所も重視する
+        (let ((raw-weight (/ 1.0 (+ var *base-variance*))))
+          (setf (aref weight-vec i)
+                (min raw-weight *max-weight-limit*)))))
 
     (list mean-vec weight-vec)))
 
 
 ;; --- 3. データ収集と学習用関数 ---
 
-;; クラス名（シンボル）と現在のセンサ値を保存する関数
-;; 使用例: (add-sample :hand-holding-type-a)
 (defun add-sample (class-name)
   (let ((entry (assoc class-name *raw-training-data*))
         (vec (copy-object *current-sensor-vector*)))
     (unless entry
       (setq entry (cons class-name nil))
       (push entry *raw-training-data*))
-    ;; データの追加 (cdr entry にリストとして追加)
     (nconc entry (list vec))
     (format t "Added sample for ~A. Total: ~A~%" class-name (length (cdr (assoc class-name *raw-training-data*))))))
 
-;; 蓄積されたデータからモデル（平均・重み）を作成する関数
 (defun train-models ()
   (setq *trained-models* nil)
   (dolist (entry *raw-training-data*)
@@ -103,43 +113,63 @@
           (format t "No data for ~A, skipping.~%" class-name)))))
 
 
-;; --- 4. ROS Callback ---
+;; --- 4. ファイル入出力 (RAWデータ保存版) ---
+
+(defun save-raw-data (filename)
+  (if *raw-training-data*
+      (progn
+        ;; 生データを保存する
+        (dump-loadable-structure filename *raw-training-data*)
+        (format t "[System] Saved RAW DATA to ~A~%" filename))
+      (warn "[System] No raw data to save!~%")))
+
+(defun load-raw-data (filename)
+  (if (probe-file filename)
+      (progn
+        ;; 生データを読み込む (変数 *raw-training-data* が復元される)
+        (load filename)
+        (format t "[System] Loaded RAW DATA from ~A.~%" filename)
+        (format t "[System] Please press 't' to re-train with current parameters.~%")) ;; 重要
+      (warn "[System] File ~A not found!~%" filename)))
+
+
+;; --- 5. ROS Callback ---
+
 (defun sensor-cb (msg)
   (let ((data (send msg :data)))
-    ;; Float32MultiArrayのデータはfloat-vectorとして取得可能
     (if (= (length data) 32)
-        (setq *current-sensor-vector* data)
+        (setq *current-sensor-vector* (scale (/ 1.0 *sensor-max-val*) data))
         (warn "Received data length is not 32!~%"))))
 
 (ros::subscribe "force_data_diff" std_msgs::Float32MultiArray #'sensor-cb)
 
-;; --- 5. メインループ ---
+
+;; --- 6. メインループ ---
+
 (defun main-loop ()
   (format t "
-=== Interactive Classifier Controller ===
- [1-6]: Add sample for Class 1-6
- [t]  : Train models (Update templates)
- [s]  : Toggle Status display (Inference ON/OFF)
- [r]  : Reset/Clear all data
+=== Interactive Classifier (Raw Data Mode) ===
+ [1-6]: Add sample
+ [t]  : Train models (Recalculate weights)
+ [s]  : Toggle Inference
+ [r]  : Reset ALL data
+ [w]  : Save RAW DATA (training_data.l)
+ [l]  : Load RAW DATA (training_data.l)
  [q]  : Quit
------------------------------------------
+----------------------------------------------
 ")
 
   (let ((running t)
-        (inference-mode nil) ;; 推論結果を表示するかどうかのフラグ
+        (inference-mode nil)
         (key-input nil))
 
     (while (and (ros::ok) running)
       (ros::spin-once)
 
-      ;; --- A. ノンブロッキングなキー入力処理 ---
-      ;; *standard-input* にデータが来ているか 0.0秒だけ確認
+      ;; --- A. キー入力 ---
       (when (select-stream (list *standard-input*) 0.001)
         (setq key-input (read-char *standard-input*))
-
-        ;; キーに応じた処理の分岐
         (case key-input
-          ;; クラスごとのデータ取得
           (#\1 (add-sample :class-1))
           (#\2 (add-sample :class-2))
           (#\3 (add-sample :class-3))
@@ -147,50 +177,55 @@
           (#\5 (add-sample :class-5))
           (#\6 (add-sample :class-6))
 
-          ;; 学習実行
           (#\t
            (format t "~%--- Training Models ---~%")
-           (train-models)
+           (train-models) ;; 現在の raw data と パラメータ で再計算
            (format t "--- Training Done ---~%"))
 
-          ;; 推論モード切り替え
           (#\s
            (setq inference-mode (not inference-mode))
            (format t "~%Inference Mode: ~A~%" (if inference-mode "ON" "OFF")))
 
-          ;; データクリア
           (#\r
            (setq *raw-training-data* nil)
            (setq *trained-models* nil)
            (format t "~%All data cleared.~%"))
 
-          ;; 終了
+          ;; 保存と読み込み
+          (#\w (save-raw-data "training_data.l"))
+          (#\l (load-raw-data "training_data.l"))
+
           (#\q (setq running nil))
           ))
 
-      ;; --- B. 推論と表示 (推論モードONのときのみ) ---
+      ;; --- B. 推論 ---
       (when (and inference-mode *trained-models*)
-        (let ((max-score -1.0)
-              (best-class "Unknown"))
+        (let ((input-norm (norm *current-sensor-vector*)))
+          (cond
+            ((< input-norm *contact-threshold*)
+             (format t "Status: No Contact (Level: ~5,3F)~%" input-norm))
 
-          (dolist (model *trained-models*)
-            (let* ((class-name (car model))
-                   (mean (cadr model))
-                   (weight (caddr model))
-                   (score (calc-weighted-cosine-similarity *current-sensor-vector* mean weight)))
+            (t
+             (let ((max-score -1.0)
+                   (best-class "Unknown"))
 
-              (when (> score max-score)
-                (setq max-score score)
-                (setq best-class class-name))))
+               (dolist (model *trained-models*)
+                 (let* ((class-name (car model))
+                        (mean (cadr model))
+                        (weight (caddr model))
+                        (score (calc-weighted-cosine-similarity *current-sensor-vector* mean weight)))
 
-          ;; 画面が流れすぎないよう、少し待つか、フォーマットを工夫
-          (format t "\rResult: ~10A (Score: ~5,3F)\n" best-class max-score)
-          (finish-output *standard-output*)
-          ))
+                   (when (> score max-score)
+                     (setq max-score score)
+                     (setq best-class class-name))))
 
-      (unix:usleep 100000) ;; CPU負荷軽減 (10ms sleep)
-      ))
+               (if (> max-score *similarity-threshold*)
+                   (format t "Result: ~10A (Score: ~5,3F, Level: ~5,3F)~%" best-class max-score input-norm)
+                   (format t "Result: UNKNOWN    (Score: ~5,3F, Level: ~5,3F)~%" max-score input-norm))
+               )))
+        (finish-output *standard-output*)))
+
+      (unix:usleep 100000)))
   (format t "~%Exiting.~%"))
 
-;; 実行
 (main-loop)

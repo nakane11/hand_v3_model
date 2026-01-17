@@ -24,20 +24,20 @@
       (nreverse (flatten value-list))))
 
   (:make-marker-body
-    (pos color &key (size 6))
+    (pos col &key (size 6))
     (setq cyl (make-cylinder size 1))
     (send cyl :replace-pos pos)
     (send cyl :rotate (/ pi 2) :y)
     (send cyl :translate (float-vector 3 0 0) :world)
-    (send cyl :set-color color)
+    (send cyl :set-color col)
     cyl)
 
   (:make-palm-marker-body
-    (pos color)
+    (pos col)
     (setq cyl (make-cube 40 40 1))
     (send cyl :replace-pos pos)
     (send cyl :rotate (/ pi 2) :y)
-    (send cyl :set-color color)
+    (send cyl :set-color col)
     cyl)
 
   (:add-marker
