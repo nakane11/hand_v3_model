@@ -26,6 +26,7 @@
 (defvar *raw-training-data* nil)
 ;; 学習済みモデル (毎回計算する)
 (defvar *trained-models* nil)
+(defvar *monitoring-target* nil)
 
 (defvar *pub-msg* (instance std_msgs::Int8 :init))
 (defvar *score-msg* (instance std_msgs::Float32 :init))
@@ -36,17 +37,6 @@
     (dotimes (i (length v1))
       (setf (aref res i) (* (aref v1 i) (aref v2 i))))
     res))
-
-(defun calc-weighted-cosine-similarity (input-vec mean-vec weight-vec)
-  (let* ((w-x (v-mul weight-vec input-vec))
-         (w-mu (v-mul weight-vec mean-vec))
-         (numerator (v. w-x mean-vec))
-         (denom-input (sqrt (abs (v. w-x input-vec))))
-         (denom-mean (sqrt (abs (v. w-mu mean-vec)))))
-
-    (if (or (< denom-input *epsilon*) (< denom-mean *epsilon*))
-        0.0
-        (/ numerator (* denom-input denom-mean)))))
 
 (defun calc-stats (vec-list)
   (let* ((len (length (car vec-list)))
@@ -73,6 +63,25 @@
                 (min raw-weight *max-weight-limit*)))))
 
     (list mean-vec weight-vec)))
+
+(defun calc-weighted-cosine-similarity (input-vec mean-vec weight-vec)
+  (let* ((w-x (v-mul weight-vec input-vec))
+         (w-mu (v-mul weight-vec mean-vec))
+         (numerator (v. w-x mean-vec))
+         (denom-input (sqrt (abs (v. w-x input-vec))))
+         (denom-mean (sqrt (abs (v. w-mu mean-vec)))))
+
+    (if (or (< denom-input *epsilon*) (< denom-mean *epsilon*))
+        0.0
+      (/ numerator (* denom-input denom-mean)))))
+
+(defun calc-cosine-similarity (v1 v2)
+  (let ((val (v. v1 v2))
+        (norm1 (norm v1))
+        (norm2 (norm v2)))
+    (if (or (< norm1 *epsilon*) (< norm2 *epsilon*))
+        0.0
+        (/ val (* norm1 norm2)))))
 
 ;; --- 3. データ収集と学習用関数 ---
 (defun add-sample (class-name)
@@ -138,15 +147,15 @@
 === Interactive Classifier (Raw Data Mode) ===
  [1-6]: Add sample
  [t]  : Train models (Recalculate weights)
- [s]  : Toggle Inference
- [r]  : Reset ALL data
- [w]  : Save RAW DATA (training_data.l)
- [l]  : Load RAW DATA (training_data.l)
+ [s]  : Start Inference Mode
+ [m]  : Start Monitoring Mode
+ [w/l/r]: Save/Load/Reset data
  [q]  : Quit
 ----------------------------------------------
 ")
   (let ((running t)
         (inference-mode nil)
+        (monitoring-mode nil)
         (key-input nil))
     (while (and (ros::ok) running)
       (ros::spin-once)
@@ -167,7 +176,13 @@
            (format t "--- Training Done ---~%"))
           (#\s
            (setq inference-mode (not inference-mode))
+           (setq monitoring-mode nil)
            (format t "~%Inference Mode: ~A~%" (if inference-mode "ON" "OFF")))
+          (#\m
+           (setq *monitoring-target* (copy-object *current-sensor-vector*))
+           (setq monitoring-mode (not monitoring-mode))
+           (setq inference-mode nil)
+           (format t "~%Monitoring Mode: ~A~%" (if monitoring-mode "ON" "OFF")))
           (#\r
            (setq *raw-training-data* nil)
            (setq *trained-models* nil)
@@ -176,43 +191,60 @@
           (#\l (load-raw-data "training_data.l"))
           (#\q (setq running nil))
           ))
-
       ;; --- B. 推論 ---
-      (when (and inference-mode *trained-models*)
-        (let ((input-norm (norm *current-sensor-vector*))
-              (publish-val 0)
-              (publish-score 0.0))
-          (cond
-           ((< input-norm *contact-threshold*)
-            (setq publish-val 0)
-            (setq publish-score 0.0)
-            (format t "Status: No Contact (Level: ~5,3F)~%" input-norm))
+      (let ((publish-val 0)
+            (publish-score 0.0))
+        (cond
+         ;; Monitoring Mode
+         (monitoring-mode
+          (if *monitoring-target*
+              (progn
+                (setq publish-score (calc-cosine-similarity *current-sensor-vector* *monitoring-target*))
+                (setq publish-val -1)
+                (format t "Monitoring... Score: ~5,3F (Target Locked)~%" publish-score))
+            (warn "No target locked yet!~%")))
+         ;; Inference Mode
+         ((and inference-mode *trained-models*)
+          (let ((input-norm (norm *current-sensor-vector*)))
+            (cond
+             ;; 接触なし
+             ((< input-norm *contact-threshold*)
+              (setq publish-val 0)
+              (setq publish-score 0.0)
+              (format t "Status: No Contact~%"))
+             ;; 接触あり
+             (t
+              (let ((max-score -1.0)
+                    (best-class "Unknown"))
+                (dolist (model *trained-models*)
+                  (let* ((class-name (car model))
+                         (mean (cadr model))
+                         (weight (caddr model))
+                         (score (calc-weighted-cosine-similarity *current-sensor-vector* mean weight)))
+                    (when (> score max-score)
+                      (setq max-score score)
+                      (setq best-class class-name))))
+                (setq publish-score max-score)
 
-            (t
-             (let ((max-score -1.0)
-                   (best-class "Unknown"))
-               (dolist (model *trained-models*)
-                 (let* ((class-name (car model))
-                        (mean (cadr model))
-                        (weight (caddr model))
-                        (score (calc-weighted-cosine-similarity *current-sensor-vector* mean weight)))
-                   (when (> score max-score)
-                     (setq max-score score)
-                     (setq best-class class-name))))
-               (setq publish-score max-score)
-               (if (> max-score *similarity-threshold*)
-                   (progn
-                     (setq publish-val (get-class-id best-class))
-                     (format t "Result: ~10A (Score: ~5,3F, Level: ~5,3F)~%" best-class max-score input-norm))
-                 (progn
-                   (setq publish-val -1)
-                   (format t "Result: UNKNOWN    (Score: ~5,3F, Level: ~5,3F)~%" max-score input-norm)))
-               )))
+                (if (> max-score *similarity-threshold*)
+                    (progn
+                      (setq publish-val (get-class-id best-class))
+                      (format t "Classify: ~A (Score: ~5,3F)~%" best-class max-score))
+                  (progn
+                    (setq publish-val -1)
+                    (format t "Classify: UNKNOWN (Score: ~5,3F)~%" max-score)))
+                )))))
+         (t
+          )
+         )
+        ;; --- Publish処理 ---
+        (when (or monitoring-mode inference-mode)
           (send *pub-msg* :data publish-val)
           (ros::publish "hand_class" *pub-msg*)
           (send *score-msg* :data publish-score)
           (ros::publish "classification_score" *score-msg*)
-          (finish-output *standard-output*)))
+          (finish-output *standard-output*))
+        )
 
       (ros::duration-sleep 0.1)))
   (format t "~%Exiting.~%"))
