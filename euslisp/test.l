@@ -50,7 +50,7 @@
                  (fill counts 0)
                  ;; 集計
                  (dolist (h history)
-                   (when (and (>= val 1) (<= val 6))
+                   (when (and (>= h 1) (<= h 6))
                      (incf (aref counts h))))
                  ;; (format t "Current buffer: ~A~%" history)
 
@@ -81,7 +81,13 @@
        )
      ))
 
-  ;; --- 各モーション定義 (変更なし) ---
+  ;; --- 各モーション定義 ---
+  (:hand-open ()
+   (format t ">> Executing: Hand Open~%")
+   (send self :publish-angle (float-vector -50.0 60.0 -60.0 -60.0 60.0 -60.0 1.5))
+   (ros::duration-sleep 2.0)
+   )
+
   (:five-finger-hook ()
    (format t ">> Executing: Five Finger Hook~%")
    (send self :publish-angle (float-vector -50.0 60.0 -60.0 -60.0 60.0 -60.0 1.5))
@@ -92,10 +98,10 @@
    (ros::duration-sleep 1.0)
    (send self :publish-angle (float-vector 10.0 -35.0 35.0 35.0 -35.0 35.0 1.5))
    (ros::duration-sleep 2.0)
-   (send self :publish-angle (float-vector 10.0 60.0 -60.0 -60.0 60.0 -60.0 1.5))
-   (ros::duration-sleep 1.0)
-   (send self :publish-angle (float-vector -50.0 60.0 -60.0 -60.0 60.0 -60.0 1.5))
-   (ros::duration-sleep 1.0)
+   ;; (send self :publish-angle (float-vector 10.0 60.0 -60.0 -60.0 60.0 -60.0 1.5))
+   ;; (ros::duration-sleep 1.0)
+   ;; (send self :publish-angle (float-vector -50.0 60.0 -60.0 -60.0 60.0 -60.0 1.5))
+   ;; (ros::duration-sleep 1.0)
    )
 
   (:interlocked-fingers ()
@@ -108,10 +114,10 @@
    (ros::duration-sleep 1.0)
    (send self :publish-angle (float-vector -20.0 -35.0 35.0 35.0 -35.0 35.0 -0.2))
    (ros::duration-sleep 2.0)
-   (send self :publish-angle (float-vector -50.0 60.0 -60.0 -60.0 60.0 -60.0 -0.2))
-   (ros::duration-sleep 1.0)
-   (send self :publish-angle (float-vector -50.0 60.0 -60.0 -60.0 60.0 -60.0 1.5))
-   (ros::duration-sleep 0.5)
+   ;; (send self :publish-angle (float-vector -50.0 60.0 -60.0 -60.0 60.0 -60.0 -0.2))
+   ;; (ros::duration-sleep 1.0)
+   ;; (send self :publish-angle (float-vector -50.0 60.0 -60.0 -60.0 60.0 -60.0 1.5))
+   ;; (ros::duration-sleep 0.5)
    )
 
   (:finger-hold ()
@@ -120,8 +126,8 @@
    (ros::duration-sleep 0.1)
    (send self :publish-angle (float-vector 10.0 60.0 -60.0 10.0 60.0 -60.0 0.2))
    (ros::duration-sleep 3.5)
-   (send self :publish-angle (float-vector -50.0 60.0 -60.0 -60.0 60.0 -60.0 1.5))
-   (ros::duration-sleep 1.0)
+   ;; (send self :publish-angle (float-vector -50.0 60.0 -60.0 -60.0 60.0 -60.0 1.5))
+   ;; (ros::duration-sleep 1.0)
    )
 
   (:mutual-palm-grasp ()
@@ -134,10 +140,10 @@
    (ros::duration-sleep 1.0)
    (send self :publish-angle (float-vector 50.0 -35.0 35.0 35.0 -35.0 35.0 1.5))
    (ros::duration-sleep 2.0)
-   (send self :publish-angle (float-vector 50.0 60.0 -60.0 -60.0 60.0 -60.0 1.5))
-   (ros::duration-sleep 1.0)
-   (send self :publish-angle (float-vector -50.0 60.0 -60.0 -60.0 60.0 -60.0 1.5))
-   (ros::duration-sleep 1.0)
+   ;; (send self :publish-angle (float-vector 50.0 60.0 -60.0 -60.0 60.0 -60.0 1.5))
+   ;; (ros::duration-sleep 1.0)
+   ;; (send self :publish-angle (float-vector -50.0 60.0 -60.0 -60.0 60.0 -60.0 1.5))
+   ;; (ros::duration-sleep 1.0)
    )
 
   (:finger-cradle-grasp ()
@@ -146,8 +152,8 @@
    (ros::duration-sleep 0.1)
    (send self :publish-angle (float-vector -50.0 -10.0 10.0 10.0 -10.0 -60.0 1.5))
    (ros::duration-sleep 4.0)
-   (send self :publish-angle (float-vector -50.0 60.0 -60.0 -60.0 60.0 -60.0 1.5))
-   (ros::duration-sleep 1.0)
+   ;; (send self :publish-angle (float-vector -50.0 60.0 -60.0 -60.0 60.0 -60.0 1.5))
+   ;; (ros::duration-sleep 1.0)
    )
 
   (:four-finger-hook ()
@@ -158,10 +164,10 @@
    (ros::duration-sleep 1.0)
    (send self :publish-angle (float-vector 10.0 -25.0 25.0 25.0 -25.0 25.0 1.5))
    (ros::duration-sleep 4.0)
-   (send self :publish-angle (float-vector 10.0 60.0 -60.0 -60.0 60.0 -60.0 1.5))
-   (ros::duration-sleep 1.0)
-   (send self :publish-angle (float-vector -50.0 60.0 -60.0 -60.0 60.0 -60.0 1.5))
-   (ros::duration-sleep 1.0)
+   ;; (send self :publish-angle (float-vector 10.0 60.0 -60.0 -60.0 60.0 -60.0 1.5))
+   ;; (ros::duration-sleep 1.0)
+   ;; (send self :publish-angle (float-vector -50.0 60.0 -60.0 -60.0 60.0 -60.0 1.5))
+   ;; (ros::duration-sleep 1.0)
    )
   )
 
@@ -177,6 +183,7 @@
  [4] Mutual Palm Grasp
  [5] Finger Cradle Grasp
  [6] Four Finger Hook
+ [o] Hand Open
  [r] Start Recognition Mode (Wait for result)
  [q] Quit
 ------------------------------
@@ -200,6 +207,7 @@
           (#\4 (send hand :mutual-palm-grasp))
           (#\5 (send hand :finger-cradle-grasp))
           (#\6 (send hand :four-finger-hook))
+          (#\o (send hand :hand-open))
           (#\r (send hand :recognize-and-act)) ;; 認識モード呼び出し
           (#\q
            (format t "Exiting...~%")
