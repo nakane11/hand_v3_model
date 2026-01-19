@@ -11,7 +11,7 @@
 (defconstant *contact-threshold* 0.3)
 
 ;; 類似度判定の閾値
-(defconstant *similarity-threshold* 0.65)
+(defconstant *similarity-threshold* 0.55)
 
 ;; ゼロ除算防止用の微小値
 (defconstant *epsilon* 1e-6)
@@ -37,8 +37,9 @@
 ;; 学習済みモデル (毎回計算する)
 (defvar *trained-models* nil)
 
-
 (defvar *pub-msg* (instance std_msgs::Int8 :init))
+(defvar *score-msg* (instance std_msgs::Float32 :init))
+
 ;; --- 2. 数学ヘルパー関数 ---
 
 (defun v-mul (v1 v2)
@@ -152,6 +153,7 @@
         (warn "Received data length is not 32!~%"))))
 
 (ros::advertise "hand_class" std_msgs::Int8 1)
+(ros::advertise "classification_score" std_msgs::Float32 1)
 (ros::subscribe "force_data_diff" std_msgs::Float32MultiArray #'sensor-cb)
 
 
@@ -212,11 +214,13 @@
       ;; --- B. 推論 ---
       (when (and inference-mode *trained-models*)
         (let ((input-norm (norm *current-sensor-vector*))
-              (publish-val 0))
+              (publish-val 0)
+              (publish-score 0.0))
           (cond
            ((< input-norm *contact-threshold*)
             (setq publish-val 0)
-             (format t "Status: No Contact (Level: ~5,3F)~%" input-norm))
+            (setq publish-score 0.0)
+            (format t "Status: No Contact (Level: ~5,3F)~%" input-norm))
 
             (t
              (let ((max-score -1.0)
@@ -232,6 +236,7 @@
                      (setq max-score score)
                      (setq best-class class-name))))
 
+               (setq publish-score max-score)
                (if (> max-score *similarity-threshold*)
                    (progn
                      (setq publish-val (get-class-id best-class))
@@ -242,9 +247,12 @@
                )))
           (send *pub-msg* :data publish-val)
           (ros::publish "hand_class" *pub-msg*)
+          (send *score-msg* :data publish-score)
+          (ros::publish "classification_score" *score-msg*)
+
         (finish-output *standard-output*)))
 
-      (unix:usleep 100000)))
+      (ros::duration-sleep 0.1)))
   (format t "~%Exiting.~%"))
 
 (main-loop)
