@@ -28,6 +28,9 @@
 (defvar *trained-models* nil)
 (defvar *monitoring-target* nil)
 
+(defvar *inference-mode* nil)
+(defvar *monitoring-mode* nil)
+
 (defvar *pub-msg* (instance std_msgs::Int8 :init))
 (defvar *score-msg* (instance std_msgs::Float32 :init))
 
@@ -135,11 +138,32 @@
   (let ((data (send msg :data)))
     (if (= (length data) 32)
         (setq *current-sensor-vector* (scale (/ 1.0 *sensor-max-val*) data))
-        (warn "Received data length is not 32!~%"))))
+      (warn "Received data length is not 32!~%"))))
+
+(defun command-cb (msg)
+  (let ((cmd (send msg :data)))
+    (cond
+     ;; "s"
+     ((string= cmd "s")
+      (setq *inference-mode* (not *inference-mode*))
+      (setq *monitoring-mode* nil)
+      (format t "~%>> [CMD-RECV] Inference Mode: ~A~%" (if *inference-mode* "ON" "OFF")))
+
+     ;; "m"
+     ((string= cmd "m")
+      (setq *monitoring-mode* (not *monitoring-mode*))
+      (setq *inference-mode* nil)
+      (when *monitoring-mode*
+        (setq *monitoring-target* (copy-object *current-sensor-vector*))
+        (format t "~%>> [CMD-RECV] Target LOCKED."))
+      (format t "~%>> [CMD-RECV] Monitoring Mode: ~A~%" (if *monitoring-mode* "ON" "OFF")))
+
+     (t (warn "Unknown command: ~A~%" cmd)))))
 
 (ros::advertise "hand_class" std_msgs::Int8 1)
 (ros::advertise "classification_score" std_msgs::Float32 1)
 (ros::subscribe "force_data_diff" std_msgs::Float32MultiArray #'sensor-cb)
+(ros::subscribe "classifier_cmd" std_msgs::String #'command-cb)
 
 ;; --- 6. メインループ ---
 (defun main-loop ()
@@ -154,8 +178,6 @@
 ----------------------------------------------
 ")
   (let ((running t)
-        (inference-mode nil)
-        (monitoring-mode nil)
         (key-input nil))
     (while (and (ros::ok) running)
       (ros::spin-once)
@@ -175,14 +197,14 @@
            (train-models)
            (format t "--- Training Done ---~%"))
           (#\s
-           (setq inference-mode (not inference-mode))
-           (setq monitoring-mode nil)
-           (format t "~%Inference Mode: ~A~%" (if inference-mode "ON" "OFF")))
+           (setq *inference-mode* (not *inference-mode*))
+           (setq *monitoring-mode* nil)
+           (format t "~%Inference Mode: ~A~%" (if *inference-mode* "ON" "OFF")))
           (#\m
            (setq *monitoring-target* (copy-object *current-sensor-vector*))
-           (setq monitoring-mode (not monitoring-mode))
-           (setq inference-mode nil)
-           (format t "~%Monitoring Mode: ~A~%" (if monitoring-mode "ON" "OFF")))
+           (setq *monitoring-mode* (not *monitoring-mode*))
+           (setq *inference-mode* nil)
+           (format t "~%Monitoring Mode: ~A~%" (if *monitoring-mode* "ON" "OFF")))
           (#\r
            (setq *raw-training-data* nil)
            (setq *trained-models* nil)
@@ -196,7 +218,7 @@
             (publish-score 0.0))
         (cond
          ;; Monitoring Mode
-         (monitoring-mode
+         (*monitoring-mode*
           (if *monitoring-target*
               (progn
                 (setq publish-score (calc-cosine-similarity *current-sensor-vector* *monitoring-target*))
@@ -204,7 +226,7 @@
                 (format t "Monitoring... Score: ~5,3F (Target Locked)~%" publish-score))
             (warn "No target locked yet!~%")))
          ;; Inference Mode
-         ((and inference-mode *trained-models*)
+         ((and *inference-mode* *trained-models*)
           (let ((input-norm (norm *current-sensor-vector*)))
             (cond
              ;; 接触なし
@@ -238,7 +260,7 @@
           )
          )
         ;; --- Publish処理 ---
-        (when (or monitoring-mode inference-mode)
+        (when (or *monitoring-mode* *inference-mode*)
           (send *pub-msg* :data publish-val)
           (ros::publish "hand_class" *pub-msg*)
           (send *score-msg* :data publish-score)
