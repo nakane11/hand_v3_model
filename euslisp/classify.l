@@ -33,6 +33,7 @@
 
 (defvar *pub-msg* (instance std_msgs::Int8 :init))
 (defvar *score-msg* (instance std_msgs::Float32 :init))
+(defvar *name-msg* (instance std_msgs::String :init))
 
 ;; --- 2. 数学ヘルパー関数 ---
 (defun v-mul (v1 v2)
@@ -134,6 +135,16 @@
     (:class-6 6)
     (t -1)))
 
+(defun get-readable-name (class-sym)
+  (case class-sym
+    (1 "five-finger-hook")
+    (2 "interlocked-fingers")
+    (3 "finger-hold")
+    (4 "mutual-palm-grasp")
+    (5 "finger-cradle-grasp")
+    (6 "four-finger-hook")
+    (t "unknown")))
+
 (defun sensor-cb (msg)
   (let ((data (send msg :data)))
     (if (= (length data) 32)
@@ -161,6 +172,7 @@
      (t (warn "Unknown command: ~A~%" cmd)))))
 
 (ros::advertise "hand_class" std_msgs::Int8 1)
+(ros::advertise "hand_class_name" std_msgs::String 1)
 (ros::advertise "classification_score" std_msgs::Float32 1)
 (ros::subscribe "force_data_diff" std_msgs::Float32MultiArray #'sensor-cb)
 (ros::subscribe "classifier_cmd" std_msgs::String #'command-cb)
@@ -263,6 +275,8 @@
         (when (or *monitoring-mode* *inference-mode*)
           (send *pub-msg* :data publish-val)
           (ros::publish "hand_class" *pub-msg*)
+          (send *name-msg* :data (get-readable-name publish-val))
+          (ros::publish "hand_class_name" *name-msg*)
           (send *score-msg* :data publish-score)
           (ros::publish "classification_score" *score-msg*)
           (finish-output *standard-output*))
