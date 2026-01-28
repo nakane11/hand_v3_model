@@ -19,6 +19,9 @@
 ;; 重みの最大値リミッタ
 (defconstant *max-weight-limit* 30.0)
 
+(defconstant *weight-limit* 0.2)  ;; これ以上強い入力は「同じ強さ」とみなす
+(defconstant *weight-offset* 0.05)
+
 ;; --- 変数定義 ---
 ;; 現在のセンサ値 (0.0~1.0に正規化)
 (defvar *current-sensor-vector* (instantiate float-vector 32))
@@ -63,7 +66,10 @@
     (dotimes (i len)
       (let ((var (aref var-vec i))
             (mean (aref mean-vec i)))
-        (let ((raw-weight (/ (expt mean 2) (+ var *base-variance*))))
+        (let* ((saturated-mean (min (abs mean) *weight-limit*))
+               (numerator (+ saturated-mean *weight-offset*))
+               (raw-weight (/ numerator (+ var *base-variance*))))
+        ;; (let ((raw-weight (/ (expt mean 2) (+ var *base-variance*))))
           (setf (aref weight-vec i)
                 (min raw-weight *max-weight-limit*)))))
 
