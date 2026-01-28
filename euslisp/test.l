@@ -49,16 +49,16 @@
          (when msg
            (let ((val (send msg :data)))
              (push val history)
-             (if (> (length history) 15) (setq history (subseq history 0 15)))
+             (if (> (length history) 10) (setq history (subseq history 0 10)))
 
-             (when (= (length history) 15)
+             (when (= (length history) 10)
                (fill counts 0)
                (dolist (h history)
                  (when (and (>= h 1) (<= h 6)) (incf (aref counts h))))
 
                (dotimes (i 6)
                  (let ((target-id (+ i 1)))
-                   (when (>= (aref counts target-id) 10)
+                   (when (>= (aref counts target-id) 7)
                      (setq detected-id target-id)
                      (setq looping nil)
                      (return))))
@@ -71,6 +71,7 @@
   (:execute-grasp (id &optional (mode :grasped))
    (unless id (return-from :execute-grasp nil))
    (format t ">> Executing Class [~A] in mode [~A]...~%" id mode)
+   ;; (ros::duration-sleep 5.0)
    (case id
      (1 (if (eq mode :grasping)
             (send self :five-finger-hook-grasping)

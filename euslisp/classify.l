@@ -9,7 +9,7 @@
 ;; 正規化後の接触判定閾値 (0.0~1.0)
 (defconstant *contact-threshold* 0.3)
 ;; 類似度判定の閾値
-(defconstant *similarity-threshold* 0.55)
+(defconstant *similarity-threshold* 0.4)
 ;; ゼロ除算防止用の微小値
 (defconstant *epsilon* 1e-6)
 ;; 分散のベースライン
@@ -17,7 +17,7 @@
 ;; 推奨: 0.001 ~ 0.01
 (defconstant *base-variance* 0.005)
 ;; 重みの最大値リミッタ
-(defconstant *max-weight-limit* 200.0)
+(defconstant *max-weight-limit* 30.0)
 
 ;; --- 変数定義 ---
 ;; 現在のセンサ値 (0.0~1.0に正規化)
@@ -61,8 +61,9 @@
     (setq var-vec (scale (/ 1.0 n) var-vec))
     ;; 重み計算
     (dotimes (i len)
-      (let ((var (aref var-vec i)))
-        (let ((raw-weight (/ 1.0 (+ var *base-variance*))))
+      (let ((var (aref var-vec i))
+            (mean (aref mean-vec i)))
+        (let ((raw-weight (/ (expt mean 2) (+ var *base-variance*))))
           (setf (aref weight-vec i)
                 (min raw-weight *max-weight-limit*)))))
 
